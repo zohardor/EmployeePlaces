@@ -1,0 +1,1837 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מרחב עבודה — ניהול צוות</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600&family=Assistant:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS & RESET
+============================================================ */
+:root {
+  --bg: #F7F5F0;
+  --surface: #FFFFFF;
+  --surface2: #F0EDE6;
+  --border: #E2DDD5;
+  --border-strong: #C8C0B4;
+  --text: #1A1714;
+  --text-2: #5A5550;
+  --text-3: #9A9490;
+  --accent: #2D5A3D;
+  --accent-light: #E8F2EB;
+  --accent-text: #1A3D28;
+  --danger: #C0392B;
+  --danger-light: #FDECEA;
+  --warn: #B8630A;
+  --warn-light: #FEF3E2;
+  --info: #1A4A6B;
+  --info-light: #E8F2FA;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
+  --font: 'Heebo', sans-serif;
+  --sidebar-w: 220px;
+  --header-h: 56px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   AUTH SCREEN
+============================================================ */
+#auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 1rem;
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: var(--shadow-md);
+}
+.auth-logo {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  letter-spacing: -0.5px;
+}
+.auth-sub { color: var(--text-2); font-size: 13px; margin-bottom: 2rem; }
+.auth-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
+
+/* ============================================================
+   FORM ELEMENTS
+============================================================ */
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
+.field input, .field select, .field textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45,90,61,0.12);
+}
+.field textarea { resize: vertical; min-height: 72px; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #234a31; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--surface2); }
+.btn-danger { background: var(--danger-light); color: var(--danger); border-color: #f5c6c2; }
+.btn-danger:hover { background: #f9d5d2; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-full { width: 100%; justify-content: center; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ============================================================
+   APP LAYOUT
+============================================================ */
+#app { display: none; height: 100vh; overflow: hidden; flex-direction: column; }
+#app.active { display: flex; }
+
+.app-header {
+  height: var(--header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  gap: 1rem;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.header-logo { font-size: 17px; font-weight: 600; color: var(--accent); letter-spacing: -0.3px; }
+.header-date { font-size: 12px; color: var(--text-2); margin-right: auto; }
+.header-user {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-2);
+}
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-text);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+}
+
+.app-body { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 1rem 0;
+}
+.nav-section { padding: 0 0.75rem; margin-bottom: 1.5rem; }
+.nav-section-label {
+  font-size: 10px; font-weight: 600; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 0 0.5rem; margin-bottom: 4px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+  transition: all .12s;
+  user-select: none;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+.nav-icon { font-size: 15px; width: 20px; text-align: center; }
+.nav-badge {
+  margin-right: auto; background: var(--danger); color: #fff;
+  font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+}
+
+/* MAIN CONTENT */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+.page { display: none; }
+.page.active { display: block; }
+
+/* ============================================================
+   PAGE HEADERS
+============================================================ */
+.page-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap;
+}
+.page-title { font-size: 20px; font-weight: 600; }
+.page-subtitle { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+
+/* ============================================================
+   CARDS & GRIDS
+============================================================ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-body { padding: 1.25rem; }
+.card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem;
+}
+.card-title { font-size: 14px; font-weight: 600; }
+
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+
+/* STAT CARDS */
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow);
+}
+.stat-label { font-size: 11px; color: var(--text-2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.stat-value { font-size: 28px; font-weight: 300; line-height: 1; }
+.stat-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+/* BADGES */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 500;
+}
+.badge-green { background: var(--accent-light); color: var(--accent-text); }
+.badge-red { background: var(--danger-light); color: var(--danger); }
+.badge-yellow { background: var(--warn-light); color: var(--warn); }
+.badge-blue { background: var(--info-light); color: var(--info); }
+.badge-gray { background: var(--surface2); color: var(--text-2); }
+
+/* ============================================================
+   TABLE
+============================================================ */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: right;
+  padding: 8px 12px;
+  font-size: 11px; font-weight: 600; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+
+/* ============================================================
+   ROOM MAP
+============================================================ */
+.room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+.room-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: box-shadow .15s;
+}
+.room-card:hover { box-shadow: var(--shadow-md); }
+.room-card-head {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.room-name { font-size: 13px; font-weight: 600; }
+.room-cap { font-size: 11px; color: var(--text-2); }
+.room-occupants { padding: 0.75rem 1rem; min-height: 60px; }
+.occupant-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface2);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px; margin: 2px;
+}
+.room-empty { font-size: 12px; color: var(--text-3); font-style: italic; }
+.room-fill-bar {
+  height: 3px;
+  background: var(--border);
+  margin: 0 1rem 0.75rem;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.room-fill-inner { height: 100%; background: var(--accent); transition: width .3s; border-radius: 2px; }
+.room-fill-inner.over { background: var(--danger); }
+
+/* ============================================================
+   WEEK CALENDAR
+============================================================ */
+.week-header {
+  display: grid;
+  grid-template-columns: 140px repeat(5, 1fr);
+  gap: 2px; margin-bottom: 2px;
+}
+.week-day-label {
+  text-align: center; font-size: 11px; font-weight: 600;
+  color: var(--text-2); padding: 6px 4px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.week-grid {
+  display: grid;
+  grid-template-columns: 140px repeat(5, 1fr);
+  gap: 2px;
+}
+.week-emp-name {
+  font-size: 12px; font-weight: 500;
+  padding: 6px 8px;
+  display: flex; align-items: center;
+  background: var(--surface2);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.week-cell {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  min-height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.week-cell:hover { opacity: 0.85; }
+.wc-office { background: var(--accent-light); color: var(--accent-text); }
+.wc-home { background: var(--info-light); color: var(--info); }
+.wc-leave { background: var(--warn-light); color: var(--warn); }
+.wc-empty { background: var(--surface); color: var(--text-3); }
+.wc-today { border-color: var(--accent) !important; border-width: 2px !important; }
+
+/* ============================================================
+   MODAL
+============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 100;
+  display: none; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: 14px;
+  width: 100%; max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  overflow: hidden;
+  animation: modalIn .2s ease;
+}
+@keyframes modalIn { from { transform: scale(.96) translateY(-8px); opacity: 0; } }
+.modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-close {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px; color: var(--text-2);
+  background: var(--surface2); border: none;
+}
+.modal-close:hover { background: var(--border); }
+.modal-body { padding: 1.5rem; }
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+
+/* ============================================================
+   TOAST
+============================================================ */
+#toast-container {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+  z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.toast {
+  padding: 10px 20px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  background: var(--text); color: #fff;
+  box-shadow: var(--shadow-md);
+  animation: toastIn .2s ease, toastOut .2s ease 2.8s forwards;
+  pointer-events: none;
+}
+.toast.success { background: var(--accent); }
+.toast.error { background: var(--danger); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(10px); } }
+
+/* ============================================================
+   LEAVE REQUEST STATUS
+============================================================ */
+.leave-timeline {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+}
+.lt-step {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border-radius: 20px;
+}
+.lt-step.done { background: var(--accent-light); color: var(--accent-text); }
+.lt-step.pending { background: var(--warn-light); color: var(--warn); }
+.lt-step.rejected { background: var(--danger-light); color: var(--danger); }
+.lt-step.waiting { background: var(--surface2); color: var(--text-3); }
+.lt-arrow { color: var(--text-3); }
+
+/* ============================================================
+   UTILITIES
+============================================================ */
+.flex { display: flex; }
+.gap-1 { gap: 0.5rem; }
+.gap-2 { gap: 1rem; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.text-sm { font-size: 12px; }
+.text-muted { color: var(--text-2); }
+.text-danger { color: var(--danger); }
+.text-success { color: var(--accent); }
+.w-full { width: 100%; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+.empty-state {
+  text-align: center; padding: 3rem 1rem;
+  color: var(--text-3); font-size: 13px;
+}
+.empty-state .empty-icon { font-size: 2rem; margin-bottom: 8px; }
+.search-input {
+  padding: 7px 12px 7px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--surface);
+  width: 220px;
+  color: var(--text);
+}
+.search-wrap { position: relative; }
+.search-wrap::before {
+  content: '🔍'; font-size: 12px;
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+}
+.section-sep { height: 1.5rem; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     AUTH SCREEN
+============================================================ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">מרחב</div>
+    <div class="auth-sub">מערכת ניהול צוות ומשרד</div>
+    <h2>כניסה למערכת</h2>
+    <div class="field">
+      <label>אימייל</label>
+      <input type="email" id="auth-email" placeholder="name@company.com">
+    </div>
+    <div class="field">
+      <label>סיסמה</label>
+      <input type="password" id="auth-password" placeholder="••••••••">
+    </div>
+    <div id="auth-error" style="color:var(--danger);font-size:12px;margin-bottom:8px;display:none"></div>
+    <button class="btn btn-primary btn-full" onclick="login()">כניסה</button>
+    <div style="margin-top:1rem;text-align:center;font-size:12px;color:var(--text-3)">
+      אין לך חשבון? פנה למנהל המערכת
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP
+============================================================ -->
+<div id="app">
+  <header class="app-header">
+    <div class="header-logo">◈ מרחב</div>
+    <div class="header-date" id="header-date"></div>
+    <div class="header-user">
+      <div class="avatar" id="user-avatar"></div>
+      <span id="user-name"></span>
+      <button class="btn btn-secondary btn-sm" onclick="logout()">יציאה</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+      <div class="nav-section">
+        <div class="nav-section-label">ראשי</div>
+        <div class="nav-item active" onclick="showPage('dashboard')">
+          <span class="nav-icon">🏠</span> לוח בקרה
+        </div>
+        <div class="nav-item" onclick="showPage('rooms')">
+          <span class="nav-icon">🚪</span> מפת חדרים
+        </div>
+        <div class="nav-item" onclick="showPage('schedule')">
+          <span class="nav-icon">📅</span> לוח שבועי
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">ניהול</div>
+        <div class="nav-item" onclick="showPage('employees')">
+          <span class="nav-icon">👥</span> עובדים
+        </div>
+        <div class="nav-item" onclick="showPage('leaves')">
+          <span class="nav-icon">🌴</span> חופשות
+          <span class="nav-badge" id="leave-badge" style="display:none">0</span>
+        </div>
+        <div class="nav-item" onclick="showPage('wfh')">
+          <span class="nav-icon">🏡</span> עבודה מהבית
+        </div>
+        <div class="nav-item manager-only" onclick="showPage('rooms-mgmt')">
+          <span class="nav-icon">⚙️</span> ניהול חדרים
+        </div>
+      </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="main-content">
+
+      <!-- ======== DASHBOARD ======== -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <div>
+            <div class="page-title">לוח בקרה</div>
+            <div class="page-subtitle" id="dash-subtitle"></div>
+          </div>
+          <button class="btn btn-primary" onclick="openDayModal()">עדכון יומי</button>
+        </div>
+
+        <div class="grid-4 mb-2" id="dash-stats"></div>
+
+        <div class="grid-2 mt-2">
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">נוכחות היום</span>
+              </div>
+              <div id="dash-today-list" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">בקשות חופשה ממתינות</span>
+              </div>
+              <div id="dash-pending-leaves" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======== ROOM MAP ======== -->
+      <div id="page-rooms" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">מפת חדרים</div>
+            <div class="page-subtitle" id="rooms-date-label"></div>
+          </div>
+          <div class="flex gap-1 items-center">
+            <input type="date" id="rooms-date" class="search-input" style="width:160px;padding:7px 12px">
+            <button class="btn btn-secondary btn-sm" onclick="loadRoomsMap()">הצג</button>
+          </div>
+        </div>
+        <div id="rooms-grid" class="room-grid"></div>
+      </div>
+
+      <!-- ======== WEEKLY SCHEDULE ======== -->
+      <div id="page-schedule" class="page">
+        <div class="page-header">
+          <div><div class="page-title">לוח שבועי</div></div>
+          <div class="flex gap-1 items-center">
+            <button class="btn btn-secondary btn-sm" onclick="changeWeek(-1)">◀ שבוע קודם</button>
+            <span id="week-label" style="font-size:13px;font-weight:500;min-width:160px;text-align:center"></span>
+            <button class="btn btn-secondary btn-sm" onclick="changeWeek(1)">שבוע הבא ▶</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:1rem;overflow-x:auto">
+            <div id="week-header" class="week-header"></div>
+            <div id="week-grid" class="week-grid"></div>
+          </div>
+          <div style="padding:0.75rem 1rem;border-top:1px solid var(--border);display:flex;gap:1rem;font-size:11px">
+            <span><span class="badge badge-green">■</span> משרד</span>
+            <span><span class="badge badge-blue">■</span> בית</span>
+            <span><span class="badge badge-yellow">■</span> חופשה</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======== EMPLOYEES ======== -->
+      <div id="page-employees" class="page">
+        <div class="page-header">
+          <div><div class="page-title">עובדים</div></div>
+          <div class="flex gap-1 items-center">
+            <div class="search-wrap">
+              <input class="search-input" type="text" id="emp-search" placeholder="חיפוש..." oninput="filterEmployees()">
+            </div>
+            <button class="btn btn-primary admin-only" onclick="openEmployeeModal()">+ עובד חדש</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>שם</th>
+                  <th>קבוצה</th>
+                  <th>חדר ראשי</th>
+                  <th>תפקיד</th>
+                  <th>ימי בית/שבוע</th>
+                  <th>פעיל</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="employees-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======== LEAVES ======== -->
+      <div id="page-leaves" class="page">
+        <div class="page-header">
+          <div><div class="page-title">ניהול חופשות</div></div>
+          <button class="btn btn-primary" onclick="openLeaveRequestModal()">+ בקשת חופשה</button>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap" id="leave-filters">
+          <button class="btn btn-secondary btn-sm active-filter" onclick="setLeaveFilter('all',this)">הכל</button>
+          <button class="btn btn-secondary btn-sm" onclick="setLeaveFilter('pending_manager',this)">ממתין למנהל</button>
+          <button class="btn btn-secondary btn-sm" onclick="setLeaveFilter('pending_admin',this)">ממתין לאדמין</button>
+          <button class="btn btn-secondary btn-sm" onclick="setLeaveFilter('approved',this)">אושר</button>
+          <button class="btn btn-secondary btn-sm" onclick="setLeaveFilter('rejected',this)">נדחה</button>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>עובד</th>
+                  <th>סוג</th>
+                  <th>מתאריך</th>
+                  <th>עד תאריך</th>
+                  <th>ימים</th>
+                  <th>סטטוס</th>
+                  <th>פעולות</th>
+                </tr>
+              </thead>
+              <tbody id="leaves-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======== WFH ======== -->
+      <div id="page-wfh" class="page">
+        <div class="page-header">
+          <div><div class="page-title">עבודה מהבית</div></div>
+        </div>
+
+        <div class="grid-3 mb-2" id="wfh-stats"></div>
+
+        <div class="card mt-2">
+          <div class="card-header">
+            <span class="card-title">מדיניות לפי קבוצה</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>קבוצה</th>
+                  <th>עובדים</th>
+                  <th>% מקסימום מהבית</th>
+                  <th>% גמישות</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="wfh-policy-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card mt-2">
+          <div class="card-header">
+            <span class="card-title">עובדים מהבית השבוע</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>עובד</th>
+                  <th>קבוצה</th>
+                  <th>א</th><th>ב</th><th>ג</th><th>ד</th><th>ה</th>
+                  <th>סה"כ ימי בית</th>
+                </tr>
+              </thead>
+              <tbody id="wfh-week-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======== ROOMS MANAGEMENT ======== -->
+      <div id="page-rooms-mgmt" class="page">
+        <div class="page-header">
+          <div><div class="page-title">ניהול חדרים</div></div>
+          <button class="btn btn-primary" onclick="openRoomModal()">+ חדר חדש</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>שם חדר</th><th>קיבולת</th><th>סוג</th><th>קבוצה ראשית</th><th></th></tr>
+              </thead>
+              <tbody id="rooms-mgmt-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODALS
+============================================================ -->
+
+<!-- Day Update Modal -->
+<div class="modal-overlay" id="modal-day">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">עדכון נוכחות יומי</span>
+      <button class="modal-close" onclick="closeModal('modal-day')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>תאריך</label>
+        <input type="date" id="day-modal-date">
+      </div>
+      <div id="day-modal-list" style="max-height:380px;overflow-y:auto;margin-top:0.5rem"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-day')">סגור</button>
+      <button class="btn btn-primary" onclick="saveDayUpdates()">שמירה</button>
+    </div>
+  </div>
+</div>
+
+<!-- Employee Modal -->
+<div class="modal-overlay" id="modal-employee">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="emp-modal-title">עובד חדש</span>
+      <button class="modal-close" onclick="closeModal('modal-employee')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>שם מלא</label><input type="text" id="emp-name"></div>
+      <div class="field"><label>אימייל</label><input type="email" id="emp-email"></div>
+      <div class="field">
+        <label>קבוצה</label>
+        <select id="emp-group"></select>
+      </div>
+      <div class="field">
+        <label>חדר ראשי</label>
+        <select id="emp-room"></select>
+      </div>
+      <div class="field">
+        <label>תפקיד</label>
+        <select id="emp-role">
+          <option value="employee">עובד</option>
+          <option value="manager">מנהל</option>
+          <option value="admin">אדמין</option>
+        </select>
+      </div>
+      <div class="field"><label>ימי עבודה מהבית בשבוע</label><input type="number" id="emp-home-days" min="0" max="5" value="1"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-employee')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveEmployee()">שמירה</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leave Request Modal -->
+<div class="modal-overlay" id="modal-leave">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">בקשת חופשה</span>
+      <button class="modal-close" onclick="closeModal('modal-leave')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>עובד</label>
+        <select id="leave-employee"></select>
+      </div>
+      <div class="field">
+        <label>סוג חופשה</label>
+        <select id="leave-type">
+          <option value="annual">חופשה שנתית</option>
+          <option value="sick">מחלה</option>
+          <option value="special">חופשה מיוחדת</option>
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>מתאריך</label><input type="date" id="leave-start"></div>
+        <div class="field"><label>עד תאריך</label><input type="date" id="leave-end"></div>
+      </div>
+      <div class="field"><label>הערה</label><textarea id="leave-note" placeholder="הערה אופציונלית..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-leave')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveLeaveRequest()">שליחה</button>
+    </div>
+  </div>
+</div>
+
+<!-- Room Modal -->
+<div class="modal-overlay" id="modal-room">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="room-modal-title">חדר חדש</span>
+      <button class="modal-close" onclick="closeModal('modal-room')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>שם החדר</label><input type="text" id="room-name-he"></div>
+      <div class="field"><label>קיבולת</label><input type="number" id="room-capacity" min="1" value="4"></div>
+      <div class="field">
+        <label>סוג</label>
+        <select id="room-type">
+          <option value="shared">שיתופי</option>
+          <option value="private">פרטי</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>קבוצה ראשית</label>
+        <select id="room-group"><option value="">ללא</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-room')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveRoom()">שמירה</button>
+    </div>
+  </div>
+</div>
+
+<!-- WFH Policy Modal -->
+<div class="modal-overlay" id="modal-wfh-policy">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">עריכת מדיניות WFH</span>
+      <button class="modal-close" onclick="closeModal('modal-wfh-policy')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="wfh-policy-group-name" style="font-weight:600;margin-bottom:1rem"></div>
+      <div class="field">
+        <label>% מקסימום עובדים מהבית</label>
+        <input type="number" id="wfh-max" min="0" max="100" value="20">
+      </div>
+      <div class="field">
+        <label>% גמישות מותרת</label>
+        <input type="number" id="wfh-flex" min="0" max="100" value="20">
+      </div>
+      <input type="hidden" id="wfh-policy-group-id">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wfh-policy')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveWfhPolicy()">שמירה</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assignment Modal -->
+<div class="modal-overlay" id="modal-assign">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">שיבוץ לחדר</span>
+      <button class="modal-close" onclick="closeModal('modal-assign')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="assign-context" style="margin-bottom:1rem;font-size:13px;color:var(--text-2)"></div>
+      <div class="field">
+        <label>חדר</label>
+        <select id="assign-room"></select>
+      </div>
+      <div class="field"><label>הערה</label><input type="text" id="assign-note" placeholder="אופציונלי"></div>
+      <input type="hidden" id="assign-emp-id">
+      <input type="hidden" id="assign-date">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-assign')">ביטול</button>
+      <button class="btn btn-primary" onclick="saveAssignment()">שיבוץ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast-container"></div>
+
+<!-- ============================================================
+     JAVASCRIPT
+============================================================ -->
+<script>
+// ============================================================
+// CONFIG — Replace with your Supabase project details
+// ============================================================
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// STATE
+// ============================================================
+let currentUser = null;
+let currentEmployee = null;
+let allEmployees = [];
+let allRooms = [];
+let allGroups = [];
+let leaveFilter = 'all';
+let currentWeekStart = null;
+let editingRoomId = null;
+let editingEmployeeId = null;
+let dayModalData = {};
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) {
+    await onLogin(session.user);
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+  db.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN') await onLogin(session.user);
+    if (event === 'SIGNED_OUT') onLogout();
+  });
+  setCurrentWeek();
+  updateHeaderDate();
+}
+
+function updateHeaderDate() {
+  const now = new Date();
+  const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  document.getElementById('header-date').textContent =
+    `יום ${days[now.getDay()]}, ${now.getDate()} ב${months[now.getMonth()]} ${now.getFullYear()}`;
+}
+
+async function onLogin(user) {
+  currentUser = user;
+  const { data } = await db.from('employees').select('*, groups(*), rooms(*)').eq('auth_user_id', user.id).single();
+  currentEmployee = data;
+
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').classList.add('active');
+
+  const initials = (data?.full_name || user.email).split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-name').textContent = data?.full_name || user.email;
+
+  // Hide admin-only items for non-admins
+  if (currentEmployee?.role !== 'admin') {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+  }
+  if (!['admin','manager'].includes(currentEmployee?.role)) {
+    document.querySelectorAll('.manager-only').forEach(el => el.style.display = 'none');
+  }
+
+  await loadBaseData();
+  await loadDashboard();
+  await loadLeaveBadge();
+}
+
+function onLogout() {
+  currentUser = null;
+  currentEmployee = null;
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+async function login() {
+  const email = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.style.display = 'none';
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = 'שגיאה: ' + error.message; errEl.style.display = 'block'; }
+}
+
+async function logout() {
+  await db.auth.signOut();
+}
+
+// ============================================================
+// BASE DATA
+// ============================================================
+async function loadBaseData() {
+  const [{ data: emps }, { data: rooms }, { data: groups }] = await Promise.all([
+    db.from('employees').select('*, groups(id,name_he), rooms(id,name_he)').eq('is_active', true).order('full_name'),
+    db.from('rooms').select('*, groups(id,name_he)').order('name_he'),
+    db.from('groups').select('*').order('name_he'),
+  ]);
+  allEmployees = emps || [];
+  allRooms = rooms || [];
+  allGroups = groups || [];
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page)?.classList.add('active');
+  event?.currentTarget?.classList.add('active');
+
+  const loaders = {
+    dashboard: loadDashboard,
+    rooms: loadRoomsMap,
+    schedule: loadWeekSchedule,
+    employees: loadEmployees,
+    leaves: loadLeaves,
+    wfh: loadWfh,
+    'rooms-mgmt': loadRoomsMgmt,
+  };
+  loaders[page]?.();
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+async function loadDashboard() {
+  const today = todayStr();
+  document.getElementById('dash-subtitle').textContent = 'נכון ל־' + formatDate(today);
+
+  const { data: workdays } = await db.from('work_days')
+    .select('*, employees(id,full_name,groups(name_he))')
+    .eq('date', today);
+
+  const byLoc = { office: 0, home: 0, leave: 0 };
+  (workdays || []).forEach(wd => { byLoc[wd.location] = (byLoc[wd.location] || 0) + 1; });
+
+  const notReported = allEmployees.length - (workdays?.length || 0);
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">במשרד</div>
+      <div class="stat-value" style="color:var(--accent)">${byLoc.office}</div>
+      <div class="stat-sub">עובדים נוכחים</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">מהבית</div>
+      <div class="stat-value" style="color:var(--info)">${byLoc.home}</div>
+      <div class="stat-sub">עובדים מרחוק</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">חופשה</div>
+      <div class="stat-value" style="color:var(--warn)">${byLoc.leave}</div>
+      <div class="stat-sub">עובדים בחופשה</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">לא דווח</div>
+      <div class="stat-value" style="color:var(--text-3)">${notReported}</div>
+      <div class="stat-sub">ממתין לעדכון</div>
+    </div>
+  `;
+
+  const listEl = document.getElementById('dash-today-list');
+  if (!workdays?.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div>לא עודכנה נוכחות להיום</div>';
+  } else {
+    listEl.innerHTML = workdays.map(wd => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:500">${wd.employees?.full_name || '—'}</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="text-sm text-muted">${wd.employees?.groups?.name_he || ''}</span>
+          ${locBadge(wd.location)}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  await loadPendingLeaves();
+}
+
+async function loadPendingLeaves() {
+  const { data: leaves } = await db.from('leave_requests')
+    .select('*, employees(full_name)')
+    .in('status', ['pending_manager', 'pending_admin'])
+    .order('created_at');
+
+  const el = document.getElementById('dash-pending-leaves');
+  if (!leaves?.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div>אין בקשות ממתינות</div>';
+    return;
+  }
+  el.innerHTML = leaves.map(l => `
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:500;font-size:13px">${l.employees?.full_name}</div>
+        ${leaveStatusBadge(l.status)}
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:3px">${formatDate(l.start_date)} — ${formatDate(l.end_date)}</div>
+      ${canApprove(l) ? `
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-sm" style="background:var(--accent-light);color:var(--accent-text);border-color:transparent" onclick="approveLeave('${l.id}')">אישור</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectLeave('${l.id}')">דחייה</button>
+        </div>` : ''}
+    </div>
+  `).join('');
+}
+
+function canApprove(leave) {
+  if (!currentEmployee) return false;
+  if (currentEmployee.role === 'admin' && leave.status === 'pending_admin') return true;
+  if (currentEmployee.role === 'manager' && leave.status === 'pending_manager') return true;
+  return false;
+}
+
+// ============================================================
+// ROOMS MAP
+// ============================================================
+async function loadRoomsMap() {
+  const dateEl = document.getElementById('rooms-date');
+  if (!dateEl.value) dateEl.value = todayStr();
+  const date = dateEl.value;
+  document.getElementById('rooms-date-label').textContent = 'תאריך: ' + formatDate(date);
+
+  const { data: workdays } = await db.from('work_days')
+    .select('employee_id, room_id, location')
+    .eq('date', date)
+    .eq('location', 'office');
+
+  const { data: assignments } = await db.from('assignments')
+    .select('employee_id, room_id')
+    .eq('date', date);
+
+  // Build room → employees map
+  const roomMap = {};
+  allRooms.forEach(r => roomMap[r.id] = []);
+
+  // Prefer explicit assignment, fallback to work_day room, fallback to primary_room
+  const empInRoom = new Map();
+  (assignments || []).forEach(a => empInRoom.set(a.employee_id, a.room_id));
+  (workdays || []).forEach(wd => {
+    if (!empInRoom.has(wd.employee_id) && wd.room_id) empInRoom.set(wd.employee_id, wd.room_id);
+  });
+  // Fill with primary rooms for office workers without explicit room
+  const inOffice = new Set((workdays || []).map(w => w.employee_id));
+  allEmployees.forEach(emp => {
+    if (inOffice.has(emp.id) && !empInRoom.has(emp.id) && emp.primary_room_id) {
+      empInRoom.set(emp.id, emp.primary_room_id);
+    }
+  });
+
+  const empById = Object.fromEntries(allEmployees.map(e => [e.id, e]));
+  empInRoom.forEach((roomId, empId) => {
+    if (roomMap[roomId]) roomMap[roomId].push(empById[empId]?.full_name || empId);
+  });
+
+  document.getElementById('rooms-grid').innerHTML = allRooms.map(room => {
+    const occupants = roomMap[room.id] || [];
+    const pct = Math.min(100, Math.round(occupants.length / room.capacity * 100));
+    const over = occupants.length > room.capacity;
+    return `
+      <div class="room-card">
+        <div class="room-card-head">
+          <span class="room-name">${room.name_he}</span>
+          <span class="room-cap ${over ? 'text-danger' : 'text-muted'}">${occupants.length}/${room.capacity}</span>
+        </div>
+        <div class="room-occupants">
+          ${occupants.length ? occupants.map(n => `<span class="occupant-chip">👤 ${n}</span>`).join('') : '<span class="room-empty">פנוי</span>'}
+        </div>
+        <div class="room-fill-bar">
+          <div class="room-fill-inner ${over?'over':''}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ============================================================
+// WEEKLY SCHEDULE
+// ============================================================
+function setCurrentWeek() {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const sun = new Date(now);
+  sun.setDate(now.getDate() - day);
+  currentWeekStart = sun;
+}
+
+function changeWeek(dir) {
+  currentWeekStart = new Date(currentWeekStart);
+  currentWeekStart.setDate(currentWeekStart.getDate() + dir * 7);
+  loadWeekSchedule();
+}
+
+async function loadWeekSchedule() {
+  const days = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+  const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי'];
+  const today = todayStr();
+  const startStr = dateStr(days[0]);
+  const endStr = dateStr(days[4]);
+
+  document.getElementById('week-label').textContent =
+    `${formatDate(startStr)} — ${formatDate(endStr)}`;
+
+  const { data: workdays } = await db.from('work_days')
+    .select('employee_id, date, location, room_id')
+    .gte('date', startStr).lte('date', endStr);
+
+  const wdMap = {};
+  (workdays || []).forEach(wd => {
+    const key = wd.employee_id + '_' + wd.date;
+    wdMap[key] = wd.location;
+  });
+
+  const headerEl = document.getElementById('week-header');
+  headerEl.innerHTML = '<div></div>' + days.map((d, i) => {
+    const ds = dateStr(d);
+    const isToday = ds === today;
+    return `<div class="week-day-label ${isToday?'text-success':''}">
+      ${dayNames[i]}<br><span style="font-size:12px">${d.getDate()}/${d.getMonth()+1}</span>
+    </div>`;
+  }).join('');
+
+  const gridEl = document.getElementById('week-grid');
+  gridEl.innerHTML = allEmployees.map(emp => {
+    const cells = days.map((d, i) => {
+      const ds = dateStr(d);
+      const loc = wdMap[emp.id + '_' + ds];
+      const isToday = ds === today;
+      let cls = 'wc-empty', label = '—';
+      if (loc === 'office') { cls = 'wc-office'; label = 'משרד'; }
+      if (loc === 'home') { cls = 'wc-home'; label = 'בית'; }
+      if (loc === 'leave') { cls = 'wc-leave'; label = 'חופשה'; }
+      return `<div class="week-cell ${cls} ${isToday?'wc-today':''}"
+        onclick="openAssignFromCell('${emp.id}','${ds}')" title="${emp.full_name} — ${dayNames[i]}">${label}</div>`;
+    }).join('');
+    return `<div class="week-emp-name" title="${emp.groups?.name_he||''}">${emp.full_name}</div>${cells}`;
+  }).join('');
+}
+
+function openAssignFromCell(empId, date) {
+  if (!['admin','manager'].includes(currentEmployee?.role)) return;
+  const emp = allEmployees.find(e => e.id === empId);
+  document.getElementById('assign-emp-id').value = empId;
+  document.getElementById('assign-date').value = date;
+  document.getElementById('assign-context').textContent = `${emp?.full_name} — ${formatDate(date)}`;
+  document.getElementById('assign-room').innerHTML = allRooms.map(r =>
+    `<option value="${r.id}">${r.name_he} (${r.capacity} מקומות)</option>`).join('');
+  document.getElementById('assign-note').value = '';
+  openModal('modal-assign');
+}
+
+async function saveAssignment() {
+  const empId = document.getElementById('assign-emp-id').value;
+  const date = document.getElementById('assign-date').value;
+  const roomId = document.getElementById('assign-room').value;
+  const note = document.getElementById('assign-note').value;
+
+  const { error } = await db.from('work_days').upsert({
+    employee_id: empId,
+    date,
+    location: 'office',
+    room_id: roomId,
+    note,
+    set_by: currentEmployee?.id,
+  }, { onConflict: 'employee_id,date' });
+
+  if (error) { toast('שגיאה בשמירה', 'error'); return; }
+  toast('שיבוץ נשמר', 'success');
+  closeModal('modal-assign');
+  loadWeekSchedule();
+}
+
+// ============================================================
+// EMPLOYEES
+// ============================================================
+async function loadEmployees() {
+  renderEmployees(allEmployees);
+  populateGroupSelect('emp-group');
+  populateRoomSelect('emp-room');
+}
+
+function renderEmployees(list) {
+  const roleLabel = { admin: 'אדמין', manager: 'מנהל', employee: 'עובד' };
+  document.getElementById('employees-tbody').innerHTML = list.map(emp => `
+    <tr>
+      <td><span style="font-weight:500">${emp.full_name}</span><br><span class="text-sm text-muted">${emp.email}</span></td>
+      <td>${emp.groups?.name_he || '—'}</td>
+      <td>${emp.rooms?.name_he || '—'}</td>
+      <td><span class="badge badge-gray">${roleLabel[emp.role] || emp.role}</span></td>
+      <td>${emp.home_days_per_week ?? 1}</td>
+      <td><span class="badge ${emp.is_active ? 'badge-green' : 'badge-gray'}">${emp.is_active ? 'פעיל' : 'לא פעיל'}</span></td>
+      <td>
+        <button class="btn btn-sm btn-secondary admin-only" onclick="editEmployee('${emp.id}')">עריכה</button>
+      </td>
+    </tr>
+  `).join('');
+  if (currentEmployee?.role !== 'admin') {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+  }
+}
+
+function filterEmployees() {
+  const q = document.getElementById('emp-search').value.toLowerCase();
+  renderEmployees(allEmployees.filter(e =>
+    e.full_name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q)
+  ));
+}
+
+function openEmployeeModal(id) {
+  editingEmployeeId = id || null;
+  document.getElementById('emp-modal-title').textContent = id ? 'עריכת עובד' : 'עובד חדש';
+  if (!id) {
+    ['emp-name','emp-email'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('emp-home-days').value = 1;
+    document.getElementById('emp-role').value = 'employee';
+  }
+  populateGroupSelect('emp-group');
+  populateRoomSelect('emp-room');
+  openModal('modal-employee');
+}
+
+function editEmployee(id) {
+  const emp = allEmployees.find(e => e.id === id);
+  if (!emp) return;
+  editingEmployeeId = id;
+  document.getElementById('emp-modal-title').textContent = 'עריכת עובד';
+  document.getElementById('emp-name').value = emp.full_name;
+  document.getElementById('emp-email').value = emp.email;
+  document.getElementById('emp-home-days').value = emp.home_days_per_week ?? 1;
+  document.getElementById('emp-role').value = emp.role;
+  populateGroupSelect('emp-group', emp.group_id);
+  populateRoomSelect('emp-room', emp.primary_room_id);
+  openModal('modal-employee');
+}
+
+async function saveEmployee() {
+  const data = {
+    full_name: document.getElementById('emp-name').value,
+    email: document.getElementById('emp-email').value,
+    group_id: document.getElementById('emp-group').value || null,
+    primary_room_id: document.getElementById('emp-room').value || null,
+    role: document.getElementById('emp-role').value,
+    home_days_per_week: parseInt(document.getElementById('emp-home-days').value) || 1,
+  };
+  let error;
+  if (editingEmployeeId) {
+    ({ error } = await db.from('employees').update(data).eq('id', editingEmployeeId));
+  } else {
+    ({ error } = await db.from('employees').insert(data));
+  }
+  if (error) { toast('שגיאה: ' + error.message, 'error'); return; }
+  toast('נשמר בהצלחה', 'success');
+  closeModal('modal-employee');
+  await loadBaseData();
+  loadEmployees();
+}
+
+// ============================================================
+// LEAVES
+// ============================================================
+async function loadLeaves() {
+  let query = db.from('leave_requests')
+    .select('*, employees(full_name, group_id)')
+    .order('created_at', { ascending: false });
+
+  if (leaveFilter !== 'all') query = query.eq('status', leaveFilter);
+
+  const { data: leaves } = await query;
+  const typeLabel = { annual: 'שנתית', sick: 'מחלה', special: 'מיוחדת' };
+
+  document.getElementById('leaves-tbody').innerHTML = (leaves || []).map(l => {
+    const days = daysBetween(l.start_date, l.end_date);
+    return `
+      <tr>
+        <td>${l.employees?.full_name || '—'}</td>
+        <td>${typeLabel[l.type] || l.type}</td>
+        <td>${formatDate(l.start_date)}</td>
+        <td>${formatDate(l.end_date)}</td>
+        <td>${days}</td>
+        <td>${leaveStatusBadge(l.status)}</td>
+        <td>
+          <div style="display:flex;gap:4px">
+            ${canApprove(l) ? `
+              <button class="btn btn-sm" style="background:var(--accent-light);color:var(--accent-text);border:none" onclick="approveLeave('${l.id}')">אישור</button>
+              <button class="btn btn-sm btn-danger" onclick="rejectLeave('${l.id}')">דחייה</button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  if (!leaves?.length) {
+    document.getElementById('leaves-tbody').innerHTML =
+      '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:2rem">אין בקשות חופשה</td></tr>';
+  }
+  populateEmployeeSelect('leave-employee');
+}
+
+function setLeaveFilter(filter, btn) {
+  leaveFilter = filter;
+  document.querySelectorAll('#leave-filters .btn').forEach(b => b.classList.remove('active-filter'));
+  btn.classList.add('active-filter');
+  loadLeaves();
+}
+
+function openLeaveRequestModal() {
+  populateEmployeeSelect('leave-employee');
+  const today = todayStr();
+  document.getElementById('leave-start').value = today;
+  document.getElementById('leave-end').value = today;
+  document.getElementById('leave-note').value = '';
+  openModal('modal-leave');
+}
+
+async function saveLeaveRequest() {
+  const empId = document.getElementById('leave-employee').value;
+  const start = document.getElementById('leave-start').value;
+  const end = document.getElementById('leave-end').value;
+  if (!empId || !start || !end) { toast('יש למלא את כל השדות', 'error'); return; }
+
+  const { error } = await db.from('leave_requests').insert({
+    employee_id: empId,
+    type: document.getElementById('leave-type').value,
+    start_date: start,
+    end_date: end,
+    employee_note: document.getElementById('leave-note').value,
+    status: 'pending_manager',
+  });
+  if (error) { toast('שגיאה: ' + error.message, 'error'); return; }
+  toast('הבקשה נשלחה', 'success');
+  closeModal('modal-leave');
+  loadLeaves();
+  loadLeaveBadge();
+}
+
+async function approveLeave(id) {
+  const { data: leave } = await db.from('leave_requests').select('status').eq('id', id).single();
+  let newStatus;
+  if (currentEmployee?.role === 'manager' && leave?.status === 'pending_manager') newStatus = 'pending_admin';
+  else if (currentEmployee?.role === 'admin') newStatus = 'approved';
+  else return;
+
+  const update = { status: newStatus };
+  if (currentEmployee.role === 'manager') {
+    update.manager_id = currentEmployee.id;
+    update.manager_approved_at = new Date().toISOString();
+  } else {
+    update.admin_id = currentEmployee.id;
+    update.admin_approved_at = new Date().toISOString();
+  }
+  const { error } = await db.from('leave_requests').update(update).eq('id', id);
+  if (error) { toast('שגיאה', 'error'); return; }
+
+  if (newStatus === 'approved') await createLeaveDays(id);
+  toast(newStatus === 'approved' ? 'אושר!' : 'עבר לאדמין לאישור סופי', 'success');
+  loadLeaves(); loadDashboard(); loadLeaveBadge();
+}
+
+async function createLeaveDays(leaveId) {
+  const { data: leave } = await db.from('leave_requests')
+    .select('employee_id, start_date, end_date').eq('id', leaveId).single();
+  if (!leave) return;
+  const rows = [];
+  const cur = new Date(leave.start_date);
+  const end = new Date(leave.end_date);
+  while (cur <= end) {
+    const day = cur.getDay();
+    if (day !== 5 && day !== 6) {
+      rows.push({ employee_id: leave.employee_id, date: dateStr(cur), location: 'leave', set_by: currentEmployee?.id });
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (rows.length) await db.from('work_days').upsert(rows, { onConflict: 'employee_id,date' });
+}
+
+async function rejectLeave(id) {
+  const reason = prompt('סיבת הדחייה (אופציונלי):') ?? '';
+  const { error } = await db.from('leave_requests').update({
+    status: 'rejected', rejection_reason: reason
+  }).eq('id', id);
+  if (error) { toast('שגיאה', 'error'); return; }
+  toast('הבקשה נדחתה', 'error');
+  loadLeaves(); loadDashboard(); loadLeaveBadge();
+}
+
+async function loadLeaveBadge() {
+  const { count } = await db.from('leave_requests')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['pending_manager', 'pending_admin']);
+  const badge = document.getElementById('leave-badge');
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else badge.style.display = 'none';
+}
+
+// ============================================================
+// WFH
+// ============================================================
+async function loadWfh() {
+  const weekDays = getWeekDates();
+  const { data: workdays } = await db.from('work_days')
+    .select('employee_id, date, location')
+    .gte('date', weekDays[0]).lte('date', weekDays[4]);
+
+  // Stats for today
+  const today = todayStr();
+  const todayWd = (workdays || []).filter(w => w.date === today);
+  const homeToday = todayWd.filter(w => w.location === 'home').length;
+  const total = allEmployees.length;
+  const pct = total > 0 ? Math.round(homeToday / total * 100) : 0;
+
+  document.getElementById('wfh-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">מהבית היום</div>
+      <div class="stat-value" style="color:var(--info)">${homeToday}</div>
+      <div class="stat-sub">מתוך ${total} עובדים</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">אחוז WFH היום</div>
+      <div class="stat-value" style="color:${pct>20?'var(--danger)':'var(--accent)'}">${pct}%</div>
+      <div class="stat-sub">מדיניות: עד 20%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">סה"כ עובדים</div>
+      <div class="stat-value">${total}</div>
+      <div class="stat-sub">פעילים במערכת</div>
+    </div>
+  `;
+
+  // Policy table
+  document.getElementById('wfh-policy-tbody').innerHTML = allGroups.map(g => {
+    const cnt = allEmployees.filter(e => e.group_id === g.id).length;
+    return `
+      <tr>
+        <td>${g.name_he}</td>
+        <td>${cnt}</td>
+        <td>${g.wfh_max_percent}%</td>
+        <td>±${g.wfh_flex_percent}%</td>
+        <td>
+          ${['admin','manager'].includes(currentEmployee?.role) ?
+            `<button class="btn btn-sm btn-secondary" onclick="openWfhPolicyModal('${g.id}','${g.name_he}',${g.wfh_max_percent},${g.wfh_flex_percent})">עריכה</button>` : ''}
+        </td>
+      </tr>`;
+  }).join('');
+
+  // WFH week table
+  const wdByEmp = {};
+  (workdays || []).forEach(wd => {
+    if (!wdByEmp[wd.employee_id]) wdByEmp[wd.employee_id] = {};
+    wdByEmp[wd.employee_id][wd.date] = wd.location;
+  });
+
+  document.getElementById('wfh-week-tbody').innerHTML = allEmployees.map(emp => {
+    const days = weekDays.map(d => {
+      const loc = wdByEmp[emp.id]?.[d];
+      if (!loc) return '<td style="text-align:center;color:var(--text-3)">—</td>';
+      const icon = loc === 'home' ? '🏡' : loc === 'office' ? '🏢' : '🌴';
+      return `<td style="text-align:center">${icon}</td>`;
+    });
+    const homeCount = weekDays.filter(d => wdByEmp[emp.id]?.[d] === 'home').length;
+    return `
+      <tr>
+        <td style="font-weight:500">${emp.full_name}</td>
+        <td>${emp.groups?.name_he || '—'}</td>
+        ${days.join('')}
+        <td style="text-align:center;font-weight:500;color:${homeCount>emp.home_days_per_week?'var(--danger)':'var(--text)'}">${homeCount}</td>
+      </tr>`;
+  }).join('');
+}
+
+function openWfhPolicyModal(groupId, groupName, maxPct, flexPct) {
+  document.getElementById('wfh-policy-group-id').value = groupId;
+  document.getElementById('wfh-policy-group-name').textContent = groupName;
+  document.getElementById('wfh-max').value = maxPct;
+  document.getElementById('wfh-flex').value = flexPct;
+  openModal('modal-wfh-policy');
+}
+
+async function saveWfhPolicy() {
+  const groupId = document.getElementById('wfh-policy-group-id').value;
+  const { error } = await db.from('groups').update({
+    wfh_max_percent: parseInt(document.getElementById('wfh-max').value),
+    wfh_flex_percent: parseInt(document.getElementById('wfh-flex').value),
+  }).eq('id', groupId);
+  if (error) { toast('שגיאה', 'error'); return; }
+  toast('מדיניות עודכנה', 'success');
+  closeModal('modal-wfh-policy');
+  await loadBaseData();
+  loadWfh();
+}
+
+// ============================================================
+// ROOMS MANAGEMENT
+// ============================================================
+async function loadRoomsMgmt() {
+  document.getElementById('rooms-mgmt-tbody').innerHTML = allRooms.map(r => `
+    <tr>
+      <td style="font-weight:500">${r.name_he}</td>
+      <td>${r.capacity}</td>
+      <td>${r.type === 'private' ? 'פרטי' : 'שיתופי'}</td>
+      <td>${r.groups?.name_he || '—'}</td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="editRoom('${r.id}')">עריכה</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openRoomModal() {
+  editingRoomId = null;
+  document.getElementById('room-modal-title').textContent = 'חדר חדש';
+  document.getElementById('room-name-he').value = '';
+  document.getElementById('room-capacity').value = 4;
+  document.getElementById('room-type').value = 'shared';
+  populateGroupSelect('room-group', null, true);
+  openModal('modal-room');
+}
+
+function editRoom(id) {
+  editingRoomId = id;
+  const room = allRooms.find(r => r.id === id);
+  if (!room) return;
+  document.getElementById('room-modal-title').textContent = 'עריכת חדר';
+  document.getElementById('room-name-he').value = room.name_he;
+  document.getElementById('room-capacity').value = room.capacity;
+  document.getElementById('room-type').value = room.type;
+  populateGroupSelect('room-group', room.group_id, true);
+  openModal('modal-room');
+}
+
+async function saveRoom() {
+  const data = {
+    name_he: document.getElementById('room-name-he').value,
+    name: document.getElementById('room-name-he').value,
+    capacity: parseInt(document.getElementById('room-capacity').value),
+    type: document.getElementById('room-type').value,
+    group_id: document.getElementById('room-group').value || null,
+  };
+  let error;
+  if (editingRoomId) {
+    ({ error } = await db.from('rooms').update(data).eq('id', editingRoomId));
+  } else {
+    ({ error } = await db.from('rooms').insert(data));
+  }
+  if (error) { toast('שגיאה: ' + error.message, 'error'); return; }
+  toast('נשמר', 'success');
+  closeModal('modal-room');
+  await loadBaseData();
+  loadRoomsMgmt();
+}
+
+// ============================================================
+// DAY UPDATE MODAL
+// ============================================================
+async function openDayModal() {
+  const dateEl = document.getElementById('day-modal-date');
+  dateEl.value = todayStr();
+  dayModalData = {};
+  await renderDayModal();
+  openModal('modal-day');
+}
+
+document.getElementById('day-modal-date').addEventListener('change', renderDayModal);
+
+async function renderDayModal() {
+  const date = document.getElementById('day-modal-date').value;
+  const { data: workdays } = await db.from('work_days')
+    .select('employee_id, location, room_id').eq('date', date);
+
+  const wdMap = {};
+  (workdays || []).forEach(wd => { wdMap[wd.employee_id] = wd; });
+
+  document.getElementById('day-modal-list').innerHTML = allEmployees.map(emp => {
+    const cur = wdMap[emp.id];
+    const loc = dayModalData[emp.id]?.location || cur?.location || 'office';
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:500">${emp.full_name}</span>
+        <select style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--font)"
+          onchange="dayModalData['${emp.id}']={location:this.value}">
+          <option value="office" ${loc==='office'?'selected':''}>🏢 משרד</option>
+          <option value="home" ${loc==='home'?'selected':''}>🏡 בית</option>
+          <option value="leave" ${loc==='leave'?'selected':''}>🌴 חופשה</option>
+        </select>
+      </div>`;
+  }).join('');
+}
+
+async function saveDayUpdates() {
+  const date = document.getElementById('day-modal-date').value;
+  if (!Object.keys(dayModalData).length) { closeModal('modal-day'); return; }
+
+  const rows = Object.entries(dayModalData).map(([empId, d]) => ({
+    employee_id: empId, date, location: d.location, set_by: currentEmployee?.id,
+  }));
+
+  const { error } = await db.from('work_days').upsert(rows, { onConflict: 'employee_id,date' });
+  if (error) { toast('שגיאה', 'error'); return; }
+  toast('נשמר בהצלחה', 'success');
+  closeModal('modal-day');
+  dayModalData = {};
+  loadDashboard();
+}
+
+// ============================================================
+// HELPERS & UTILITIES
+// ============================================================
+function populateGroupSelect(elId, selected = null, withEmpty = false) {
+  const el = document.getElementById(elId);
+  el.innerHTML = (withEmpty ? '<option value="">ללא קבוצה</option>' : '') +
+    allGroups.map(g => `<option value="${g.id}" ${g.id === selected ? 'selected' : ''}>${g.name_he}</option>`).join('');
+}
+
+function populateRoomSelect(elId, selected = null) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '<option value="">ללא חדר ראשי</option>' +
+    allRooms.map(r => `<option value="${r.id}" ${r.id === selected ? 'selected' : ''}>${r.name_he}</option>`).join('');
+}
+
+function populateEmployeeSelect(elId) {
+  const el = document.getElementById(elId);
+  el.innerHTML = allEmployees.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function locBadge(loc) {
+  if (loc === 'office') return '<span class="badge badge-green">משרד</span>';
+  if (loc === 'home') return '<span class="badge badge-blue">בית</span>';
+  if (loc === 'leave') return '<span class="badge badge-yellow">חופשה</span>';
+  return '<span class="badge badge-gray">—</span>';
+}
+
+function leaveStatusBadge(status) {
+  const map = {
+    pending_manager: ['badge-yellow', 'ממתין למנהל'],
+    pending_admin: ['badge-blue', 'ממתין לאדמין'],
+    approved: ['badge-green', 'אושר'],
+    rejected: ['badge-red', 'נדחה'],
+  };
+  const [cls, label] = map[status] || ['badge-gray', status];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function todayStr() { return dateStr(new Date()); }
+function dateStr(d) { return d.toISOString().slice(0, 10); }
+function formatDate(s) {
+  if (!s) return '';
+  const d = new Date(s + 'T00:00:00');
+  return d.getDate() + '/' + (d.getMonth()+1) + '/' + d.getFullYear();
+}
+function daysBetween(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+}
+function getWeekDates() {
+  const days = [];
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + i);
+    days.push(dateStr(d));
+  }
+  return days;
+}
+
+// ============================================================
+// KICKOFF
+// ============================================================
+init();
+</script>
+</body>
+</html>
