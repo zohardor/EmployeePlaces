@@ -945,11 +945,25 @@ tr:hover td { background: var(--surface2); }
 // ============================================================
 // CONFIG — Replace with your Supabase project details
 // ============================================================
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// ============================================================
+// הכנס כאן את פרטי ה-Supabase שלך
+// ============================================================
+const SUPABASE_URL = 'https://oxugdbhpbuxqyhcajqkx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94dWdkYmhwYnV4cXloY2FqcWt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTg4OTYsImV4cCI6MjA5MzI5NDg5Nn0.3rLT858XRzvflRU9SPQj0z2qcVxTOvp97dgr_fFCids'; // החלף עם ה-anon key האמיתי
 
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ============================================================
+// DB INIT — מוגן מפני URL לא תקין
+// ============================================================
+let db = null;
+try {
+  const { createClient } = supabase;
+  db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  console.error('Supabase init failed:', e.message);
+  document.getElementById('auth-error').textContent =
+    'שגיאת הגדרה: ' + e.message + ' — בדוק SUPABASE_URL ו-ANON_KEY';
+  document.getElementById('auth-error').style.display = 'block';
+}
 
 // ============================================================
 // STATE
@@ -1028,6 +1042,18 @@ async function login() {
   const password = document.getElementById('auth-password').value;
   const errEl = document.getElementById('auth-error');
   errEl.style.display = 'none';
+
+  if (!db) {
+    errEl.textContent = 'שגיאת הגדרה: Supabase לא מחובר. בדוק SUPABASE_URL ו-ANON_KEY בקוד.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!email || !password) {
+    errEl.textContent = 'יש להזין אימייל וסיסמה.';
+    errEl.style.display = 'block';
+    return;
+  }
+
   const { error } = await db.auth.signInWithPassword({ email, password });
   if (error) { errEl.textContent = 'שגיאה: ' + error.message; errEl.style.display = 'block'; }
 }
