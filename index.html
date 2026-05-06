@@ -945,8 +945,8 @@ tr:hover td { background: var(--surface2); }
 // ============================================================
 // CONFIG — Replace with your Supabase project details
 // ============================================================
-const SUPABASE_URL = 'https://oxugdbhpbuxqyhcajqkx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94dWdkYmhwYnV4cXloY2FqcWt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTg4OTYsImV4cCI6MjA5MzI5NDg5Nn0.3rLT858XRzvflRU9SPQj0z2qcVxTOvp97dgr_fFCids';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1130,19 +1130,22 @@ async function loadDashboard() {
 
 async function loadPendingLeaves() {
   const { data: leaves } = await db.from('leave_requests')
-    .select('*, employees(full_name)')
+    .select('*')
     .in('status', ['pending_manager', 'pending_admin'])
     .order('created_at');
 
+  const empById = Object.fromEntries(allEmployees.map(e => [e.id, e]));
   const el = document.getElementById('dash-pending-leaves');
   if (!leaves?.length) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div>אין בקשות ממתינות</div>';
     return;
   }
-  el.innerHTML = leaves.map(l => `
+  el.innerHTML = leaves.map(l => {
+    const empName = empById[l.employee_id]?.full_name || '—';
+    return `
     <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-weight:500;font-size:13px">${l.employees?.full_name}</div>
+        <div style="font-weight:500;font-size:13px">${empName}</div>
         ${leaveStatusBadge(l.status)}
       </div>
       <div style="font-size:12px;color:var(--text-2);margin-top:3px">${formatDate(l.start_date)} — ${formatDate(l.end_date)}</div>
@@ -1152,7 +1155,7 @@ async function loadPendingLeaves() {
           <button class="btn btn-sm btn-danger" onclick="rejectLeave('${l.id}')">דחייה</button>
         </div>` : ''}
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function canApprove(leave) {
@@ -1414,19 +1417,36 @@ async function saveEmployee() {
 // ============================================================
 async function loadLeaves() {
   let query = db.from('leave_requests')
-    .select('*, employees(full_name, group_id)')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (leaveFilter !== 'all') query = query.eq('status', leaveFilter);
 
-  const { data: leaves } = await query;
-  const typeLabel = { annual: 'שנתית', sick: 'מחלה', special: 'מיוחדת' };
+  const { data: leaves, error } = await query;
 
-  document.getElementById('leaves-tbody').innerHTML = (leaves || []).map(l => {
+  if (error) {
+    console.error('loadLeaves error:', error);
+    document.getElementById('leaves-tbody').innerHTML =
+      `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:2rem">שגיאה בטעינה: ${error.message}</td></tr>`;
+    return;
+  }
+
+  const typeLabel = { annual: 'שנתית', sick: 'מחלה', special: 'מיוחדת' };
+  const empById = Object.fromEntries(allEmployees.map(e => [e.id, e]));
+
+  if (!leaves?.length) {
+    document.getElementById('leaves-tbody').innerHTML =
+      '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:2rem">אין בקשות חופשה</td></tr>';
+    populateEmployeeSelect('leave-employee');
+    return;
+  }
+
+  document.getElementById('leaves-tbody').innerHTML = leaves.map(l => {
+    const emp = empById[l.employee_id];
     const days = daysBetween(l.start_date, l.end_date);
     return `
       <tr>
-        <td>${l.employees?.full_name || '—'}</td>
+        <td>${emp?.full_name || l.employee_id?.slice(0,8) || '—'}</td>
         <td>${typeLabel[l.type] || l.type}</td>
         <td>${formatDate(l.start_date)}</td>
         <td>${formatDate(l.end_date)}</td>
@@ -1443,10 +1463,6 @@ async function loadLeaves() {
       </tr>`;
   }).join('');
 
-  if (!leaves?.length) {
-    document.getElementById('leaves-tbody').innerHTML =
-      '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:2rem">אין בקשות חופשה</td></tr>';
-  }
   populateEmployeeSelect('leave-employee');
 }
 
